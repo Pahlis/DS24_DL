@@ -1,0 +1,38 @@
+[
+  {
+    "id": "text1",
+    "title": "Vikingatiden",
+    "subject": "Fakta",
+    "level": "åk 5",
+    "content": "Vikingarna reste över stora delar av Europa, sen så höll de på med handel och plundring. Iblanda reste de till Amerika och upptäckte det innan Columbus. Vikingarna var också duktiga båtbyggare och seglare, vilket gjorde att de kunde resa långa sträckor över havet. De hade också en rik kultur med mytologi, konst och hantverk. Vikingatiden var en viktig period i Skandinaviens historia som påverkade både handel och kultur i Europa."
+  },
+  {
+    "id": "text2",
+    "title": "Fotosyntesen",
+    "subject": "Fakta",
+    "level": "åk 4",
+    "content": "Fotosyntesen är den livsviktiga process där gröna växter, alger och vissa bakterier omvandlar ljusenergi till kemisk energi, i form av socker. De använder koldioxid från luften och vatten från marken som råmaterial. Klorofyll, det gröna pigmentet i växterna, fångar upp solljuset. Under processen släpps syre ut som en biprodukt, vilket är avgörande för djur och människors andning. Fotosyntesen utgör grunden för nästan allt liv på jorden, då den producerar både mat och syre, och den binder dessutom koldioxid från atmosfären.\nUtan fotosyntesen skulle livet på jorden se helt annorlunda ut!"
+  },
+  {   
+    "id": "text3",
+    "title": "Tacos",
+    "subject": "Fakta",
+    "level": "åk 4",
+    "content": "Tacos kommer ursprungligen från Mexiko, där man lägger olika ingredienser i ett bröd som kallas tortilla eller burrito. Brödet kan vara mjukt eller hårt, och fyllningen varierar, från kött och ris till bönor, salsa och guacamole.\nI Sverige äter vi mest en variant som kallas texmex – en mix av mexikansk och amerikansk mat. Den kom hit på 1980-talet och blev riktigt populär på 2000-talet. Nu är vi bland de största texmex-ätarna i Europa!\nSvensk tacos innehåller ofta köttfärs, grönsaker, ost, salsa och gräddfil. Men det bästa med tacos är ju att man får välja själv vad man vill ha i sitt bröd!\nFörresten, visste du att 4 oktober är Taco-dagen i USA?\nTac(k) o hej!"
+  },
+  {
+    "id": "text4",
+    "title": "Den glada moroten",
+    "subject": "Svenska",
+    "level": "åk 4",
+    "content": "En solig tisdagseftermiddag bestämde sig en morot, som hette Morran, för att det var dags för äventyr. Hon rullade ut från grönsaksdisken i mataffären, förbi en förvånad tant Agda med sin kundvagn, och ut genom dörren. Morran siktade på stadens största fontän, där hon drömde om att ta ett uppfriskande dopp. Hon undvek en skällande pudel, hoppade över en trottoarkant och landade med ett plask mitt i fontänen. Morran flöt glatt runt bland mynten, kännandes sig som en riktig sjöfarare, tills en duva landade på hennes huvud och försökte picka på henne. Morran skrek högt och rullade snabbt iväg, tillbaks mot affären, där hon tacksamt lade sig bland de andra morötterna igen. Äventyret var över för denna gång."
+  },
+  {
+    "id": "text5",
+    "title": "Sveriges flagga",
+    "subject": "Fakta",
+    "level": "åk 4",
+    "content": "Sveriges flagga, även känd som 'Sveriges ensamma stjärna', har en blå bakgrund med ett gult kors. Korset symboliserar kristendomen och dess betydelse i Sveriges historia. Den blå färgen representerar himlen och vattnet, medan det gula står för solen och ljuset. Flaggan antogs officiellt den 19 juni "
+  }
+
+]
