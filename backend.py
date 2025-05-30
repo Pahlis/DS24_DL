@@ -5,21 +5,32 @@ import json
 
 
 class TextProcessor:
-    """Hanterar textbearbetning och embeddings"""
+    """
+    Ansvarar för all textbearbetning och skapande av embeddings (vektorrepresentationer av text).
+    Denna klass tar hand om att:
+    - Konvertera text till numeriska vektorer via Google's API
+    - Dela upp långa texter i hanterbara delar (chunks)
+    - Förbereda dokument för senare sökning och jämförelse
+    
+    Används som grund för RAG-systemet.  
+    """
     
     def __init__(self, api_key):
         self.client = genai.Client(api_key=api_key)
     
     def get_embedding(self, text):
-        """Hämta embedding för en text"""
+        """Hämtar embedding för en text"""
+        if not text or not text.strip():
+            return None  # För att undvika API-anrop för tom text
+
         try:
             response = self.client.models.embed_content(
                 model="text-embedding-004",
                 contents=text
             )
-            if hasattr(response, 'embeddings'):
+            if hasattr(response, "embeddings"):
                 return response.embeddings[0].values if response.embeddings else None
-            elif hasattr(response, 'embedding'):
+            elif hasattr(response, "embedding"):
                 return response.embedding.values
             else:
                 return None
@@ -27,7 +38,12 @@ class TextProcessor:
             raise Exception(f"Fel vid embedding: {e}")
     
     def chunk_text(self, text, chunk_size=500):
-        """Dela upp text i chunks"""
+        """Delar upp text i chunks
+        Strategin är att:
+        1. Dela först på stycken (dubbla radbrytningar)
+        2. Om stycke är för långt, dela på meningar
+        3. Håll meningar tillsammans så länge som möjligt
+        """
         paragraphs = text.split('\n\n')
         chunks = []
         
@@ -39,13 +55,16 @@ class TextProcessor:
             if len(para) <= chunk_size:
                 chunks.append(para)
             else:
+                # Dela upp stycket i meningar
                 sentences = para.split('. ')
                 current_chunk = ""
                 
                 for sentence in sentences:
-                    if not sentence.endswith('.') and sentence != sentences[-1]:
-                        sentence += '.'
-                        
+                    #Kontrollera att meningen slutar med punkt, utropstecken eller frågetecken
+                    if sentence[-1] not in ".!?": 
+                        sentence += "."
+
+                    # Kontrollera om meningen är för lång annars starta på nästa chunk
                     if len(current_chunk + sentence) <= chunk_size:
                         current_chunk += sentence + " "
                     else:
@@ -53,13 +72,20 @@ class TextProcessor:
                             chunks.append(current_chunk.strip())
                         current_chunk = sentence + " "
                 
+                #Lägg till sista chunk om den inte är tom
                 if current_chunk:
                     chunks.append(current_chunk.strip())
         
+        # Filtrera bort tomma chunks
         return [chunk for chunk in chunks if chunk.strip()]
     
     def prepare_document_embeddings(self, text_content, progress_callback=None):
-        """Förbered embeddings för en text"""
+        """
+        Förbereder embeddings för en hel text genom att:
+        1. Dela upp texten i chunks
+        2. Skapa embeddings för varje chunk
+        3. Returnera både embeddings och chunks för senare användning
+        """
         chunks = self.chunk_text(text_content)
         embeddings = []
         valid_chunks = []
@@ -72,31 +98,40 @@ class TextProcessor:
             if embedding:
                 embeddings.append(embedding)
                 valid_chunks.append(chunk)
-        
+            else:
+                print(f"Embedding saknas för chunk {i}")
+                        
         return np.array(embeddings), valid_chunks
 
 
 class FeedbackGenerator:
-    """Hanterar feedback-generering med RAG"""
+    """
+    Klass för att generera feedback baserat på elevens återberättelse
+    och originaltexten med hjälp av RAG (Retrieval-Augmented Generation).:
+    Använder cosine similarity för att hitta de mest relevanta delarna
+    av originaltexten för jämförelse med elevens återberättelse.
+    """
     
     def __init__(self, api_key):
         self.client = genai.Client(api_key=api_key)
     
     def cosine_similarity(self, vec1, vec2):
-        """Beräkna cosine similarity mellan två vektorer"""
+        """Beräknar cosine similarity mellan två vektorer"""
         return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
-    
+
     def retrieve_relevant_chunks(self, query_text, document_embeddings_np, document_chunks, text_processor, top_k=5):
-        """Hämta relevanta chunks baserat på query"""
+        """Hämtar de mest relevanta delarna av originaltexten baserat på elevens återberättelse"""
         query_embedding = text_processor.get_embedding(query_text)
         if not query_embedding:
             return []
         
+        #Beräkna cosine similarity mellan query och varje dokumentchunk
         similarities = []
         for i, doc_emb in enumerate(document_embeddings_np):
             sim = self.cosine_similarity(query_embedding, doc_emb)
             similarities.append((sim, document_chunks[i], i))
         
+        #Sortera efter similarity score, relevanta chunks först
         similarities.sort(key=lambda x: x[0], reverse=True)
         
         # Ta de mest relevanta chunks och lägg till lite extra kontext
@@ -120,22 +155,22 @@ class FeedbackGenerator:
         return selected_chunks
     
     def create_rag_prompt(self, user_recollection, relevant_original_chunks, conversation_history):
-        """Skapa prompt för RAG-systemet"""
+        """Skapar prompt för RAG-systemet"""
         original_context_str = "\n".join(relevant_original_chunks)
         
-        # Skapa konversationshistorik
+        # Skapar konversationshistorik
         history_str = ""
         if conversation_history and len(conversation_history) > 0:
             recent_history = conversation_history[-4:]
             history_str = "\n--- Tidigare Konversation ---"
             for msg in recent_history:
-                history_str += f"\n{msg['role'].capitalize()}: {msg['content'][:300]}"
+                history_str += f"\n{msg['role'].capitalize()}: {msg['content'][:200]}"
             history_str += "\n---------------------------"
         
         prompt = f"""
 
     Du är en hjälpsam och positiv lärare som ger feedback på en elevs återberättelse av en text. 
-    Eleven går i årskurs 4-5 och håller på att utveckla sin förmåga att återberätta.
+    Eleven är 10 år och håller på att utveckla sin förmåga att återberätta.
 
     **Dina feedbackkriterier (baserade på läroplanen):**
     -   **Innehåll:** Hur väl eleven har fått med huvudbudskapet och viktiga detaljer från originaltexten.
@@ -152,13 +187,18 @@ class FeedbackGenerator:
     Här är elevens senaste återberättelse:
     {user_recollection}
 
-    Jämför elevens text med originaltexten och ge uppmuntrande och handlingsorienterad feedback baserat på ovanstående kriterier. Max 10 meningar.
-    Fokusera på det viktigaste som eleven kan förbättra till nästa försök, eller ge tydligt beröm om återberättelsen är komplett. Fokusera inte på för mycket på detaljer, utan ge en övergripande bedömning.
-    Om återberättelsen är mycket kort (mindre än 50% av originaltexten) eller innehåller allvarliga brister, ge konstruktiv kritik och tips på hur eleven kan förbättra sin text.
+    Din feedback ska börja med ett vänligt hej, men **utan att använda elevens namn**. Till exempel: "Hej!" eller "Hej där!"
+    Jämför elevens text med originaltexten. 
+    Fokusera på det viktigaste som eleven kan förbättra till nästa försök eller ge tydligt beröm om återberättelsen stämmer i stort. 
+    Fokusera inte på för mycket på detaljer, utan ge en övergripande bedömning.
+    
+    Om återberättelsen innehåller stora delar originaltexten och bedöms vara förståelig återberättelse för en elev i årskurs 4-5: ge då ENDAST beröm och uppmuntran. 
+    Om återberättelsen är välskriven, tydlig och innehåller de flesta viktiga detaljer, avsluta med "Fantastiskt jobb! Din återberättelse är verkligen klockren och du har fått med alla viktiga detaljer. Bra jobbat! [UPPGIFT_KLAR]". Se till att alltid inkludera minst en uppmuntrande mening innan [UPPGIFT_KLAR].
+    Om återberättelsen är bra men saknar några detaljer eller har mindre språkliga fel, ge konstruktiv feedback och exempel på hur eleven kan förbättra sin text. Men skriv att eleven inte måste förbättra mer om den inte vill.
+    Om återberättelsen är otydlig, saknar viktiga detaljer eller innehåller språkliga fel, ge konstruktiv feedback och exempel på hur eleven kan förbättra sin text.
+    Fokusera på att ge tydliga, konkreta tips som eleven kan använda för att förbättra sin återberättelse nästa gång.
+    Använd ett positivt och uppmuntrande språk, som om du är en engagerad lärare som vill hjälpa eleven att växa.
 
-    Om återberättelsen innehåller 70% av originaltexten och är välskriven (du bedömer detta utifrån originaltexten och elevens nivå), ge då endast beröm och uppmuntran, t.ex. "Fantastiskt jobb! Din återberättelse är verkligen klockren och du har fått med alla viktiga detaljer. Bra jobbat! Nu är du klar med den här uppgiften. [UPPGIFT_KLAR]". Se till att alltid inkludera minst en uppmuntrande mening innan [UPPGIFT_KLAR].
-    Om återberättelsen behöver förbättras, ge konstruktiv feedback och tips på hur eleven kan förbättra sin text och ge gärna exempel, fokusera på senaste återberättelsen men uppmärksamma gärna viktiga ändringar i innehåll OCH EN språklig aspekt (t.ex. meningsbyggnad, skiljetecken, stavning, textbindning) glöm inte förklara vad aspekten innebär.
-    Formulera gärna feedbacken som frågor om texten, exempelvis "Vad tror du att vikingarna handlade med?"
     Om du inte kan ge feedback, t.ex. om texten är för kort eller otydlig, svara med "Jag behöver mer information för att kunna ge feedback.".
     Din feedback:
     """
@@ -166,16 +206,18 @@ class FeedbackGenerator:
         return prompt
     
     def get_feedback(self, user_recollection, document_embeddings_np, document_chunks, text_processor, conversation_history):
-        """Hämta feedback från Gemini"""
+        """Hämta feedback från Gemini, huvudmetoden för feedbackprocessen"""
         if document_embeddings_np is None or len(document_embeddings_np) == 0:
             return "Vänligen välj en text att återberätta först."
         
+        #Hämta relevanta chunks från originaltexten
         relevant_chunks = self.retrieve_relevant_chunks(
             user_recollection, document_embeddings_np, document_chunks, text_processor, top_k=10
         )
         if not relevant_chunks:
             return "Kunde inte hitta relevant information från texten."
         
+        #Skapa RAG-prompten och få feedback
         rag_prompt = self.create_rag_prompt(user_recollection, relevant_chunks, conversation_history)
         
         try:
@@ -193,16 +235,17 @@ class TextManager:
     
     @staticmethod
     def load_texts(filename="texts.json"):
-        """Ladda texter från JSON-fil"""
+        """Laddar texter från JSON-fil"""
         try:
             with open(filename, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except FileNotFoundError:
+        except (FileNotFoundError, json.JSONDecodeError):
             return []
+
     
     @staticmethod
     def create_custom_text_info(custom_text):
-        """Skapa textinfo för egen text"""
+        """Skapar textinfo för egen text"""
         return {
             'title': 'Din egen text',
             'subject': 'Egen',
@@ -212,13 +255,18 @@ class TextManager:
     
     @staticmethod
     def generate_text_key(text_info, index=None):
-        """Generera unik nyckel för text"""
+        """Genererar unik nyckel för text"""
         if text_info['subject'] == 'Egen':
             return f"custom_{hash(text_info['content'])}"
         else:
             return f"predefined_{index}"
 
 class ChatbotEvaluator:
+    """ 
+    Ansvarar för att utvärdera chatbotens svar på elevens återberättelse.
+    Denna klass skickar chatbotens svar till LLM för att få en score samt en motivering.
+    Använder Google Gemini API för att generera en bedömning baserat på tydlighet, relevans och pedagogiskt värde.    
+    """
     def __init__(self, api_key):
         self.client = genai.Client(api_key=api_key)
 
@@ -252,20 +300,20 @@ class ChatbotEvaluator:
         """Extrahera numerisk score från utvärderingstext"""
         import re
         
-        # Leta efter totalbetyg
-        total_match = re.search(r'TOTALBETYG:\s*(\d+)', evaluation_text)
+        # Letar efter totalbetyg
+        total_match = re.search(r"TOTALBETYG:\s*(\d+)", evaluation_text)
         if total_match:
             return int(total_match.group(1))
         
-        # Fallback: leta efter första nummer/10
-        score_match = re.search(r'(\d+)/10', evaluation_text)
+        # Fallback: letar efter första nummer/10
+        score_match = re.search(r"(\d+)/10", evaluation_text)
         if score_match:
             return int(score_match.group(1))
         
         return None
 
     def get_evaluation_summary(self, user_recollection, chatbot_response, original_text=None):
-        """Få både fullständig utvärdering och extraherad score"""
+        """För både fullständig utvärdering och extraherad score"""
         full_evaluation = self.evaluate_response(user_recollection, chatbot_response, original_text)
         score = self.parse_evaluation_score(full_evaluation)
         
@@ -285,21 +333,21 @@ class AppBackend:
         self.evaluator = ChatbotEvaluator(api_key) 
     
     def setup_api_key(self, secrets):
-        """Ställ in API-nyckel från secrets"""
+        """Ställer in API-nyckel från secrets"""
         try:
             return secrets["GEMINI_API_KEY"]
         except KeyError:
             raise Exception("GEMINI_API_KEY kunde inte hittas i secrets")
     
     def process_text_selection(self, text_info, progress_callback=None):
-        """Bearbeta vald text och skapa embeddings"""
+        """Bearbetar vald text och skapa embeddings"""
         return self.text_processor.prepare_document_embeddings(
             text_info['content'], 
             progress_callback
         )
     
     def generate_feedback(self, user_input, embeddings, chunks, conversation_history):
-        """Generera feedback för användarens input"""
+        """Genererar feedback för användarens input"""
         return self.feedback_generator.get_feedback(
             user_input, 
             embeddings, 
@@ -309,20 +357,14 @@ class AppBackend:
         )
     
     def load_available_texts(self):
-        """Ladda tillgängliga texter"""
+        """Laddar tillgängliga texter"""
         return self.text_manager.load_texts()
     
     def create_custom_text(self, text_content):
-        """Skapa custom text info"""
+        """Skapar custom text info"""
         return self.text_manager.create_custom_text_info(text_content)
     
     def generate_text_key(self, text_info, index=None):
-        """Generera text key"""
+        """Genererar text key"""
         return self.text_manager.generate_text_key(text_info, index)
-
-
-
-# Test för att se att importen fungerar
-if __name__ == "__main__":
-    print("Backend module loaded successfully!")
-    print("Available classes:", [cls for cls in dir() if cls[0].isupper()])
+    
